@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ប្រព័ន្ធគ្រប់គ្រងស្តុក និងគិតលុយ (POS)</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Custom scrollbar styling */
+        .scrollbar-style::-webkit-scrollbar {
+            width: 8px;
+        }
+        .scrollbar-style::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 20px;
+        }
+        .scrollbar-style::-webkit-scrollbar-track {
+            background: #f7f7f7;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-100/75 flex items-center justify-center z-50">
+        <div class="flex flex-col items-center">
+            <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="mt-2 text-indigo-700">កំពុងផ្ទុកទិន្នន័យ (Loading Data...)</span>
+        </div>
+    </div>
+
+    <header class="mb-6">
+        <h1 class="text-3xl md:text-4xl font-extrabold text-indigo-800 text-center mb-1">ប្រព័ន្ធគ្រប់គ្រងស្តុក & គិតលុយ</h1>
+        <p class="text-center text-sm text-gray-600">Inventory & Point-of-Sale System</p>
+        <p class="text-center text-xs mt-2 text-gray-500">អត្តសញ្ញាណសារធារណៈ (Public ID): <span id="user-id" class="font-mono text-indigo-500 bg-indigo-50 p-1 rounded">...</span></p>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- 1. Product List (Inventory) -->
+        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg h-[80vh] flex flex-col">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b pb-2">បញ្ជីទំនិញ (Inventory)</h2>
+            <div id="product-list" class="flex-grow overflow-y-auto scrollbar-style grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                <!-- Products will be dynamically loaded here -->
+                <p id="no-products" class="text-gray-500 text-center col-span-full hidden mt-8">គ្មានទំនិញនៅក្នុងស្តុកទេ។ សូមផ្ទុកទិន្នន័យដំបូង។</p>
+            </div>
+            <button id="seed-data-btn" class="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">
+                ផ្ទុកទិន្នន័យទំនិញដំបូង (Load Initial Data)
+            </button>
+        </div>
+
+        <!-- 2. Cart & Payment Section -->
+        <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg flex flex-col h-[80vh]">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b pb-2">គិតលុយ (Checkout)</h2>
+
+            <!-- Cart Items -->
+            <div id="cart-list" class="flex-grow overflow-y-auto scrollbar-style mb-4 space-y-3">
+                <p id="empty-cart" class="text-gray-500 text-center mt-8">រទេះនៅទទេ! សូមជ្រើសរើសទំនិញ។</p>
+                <!-- Cart items will be dynamically loaded here -->
+            </div>
+
+            <!-- Total Calculation -->
+            <div class="border-t pt-4 space-y-2">
+                <div class="flex justify-between font-semibold text-lg text-gray-700">
+                    <span>សរុប (USD):</span>
+                    <span id="total-usd" class="text-indigo-600">$0.00</span>
+                </div>
+                <div class="flex justify-between font-semibold text-xl text-indigo-800">
+                    <span>សរុប (KHR):</span>
+                    <span id="total-khr">0.00៛</span>
+                </div>
+                <p class="text-xs text-red-500">អត្រាប្តូរប្រាក់: $1 USD = 4000៛ KHR</p>
+            </div>
+
+            <!-- Payment Input -->
+            <div class="mt-4 pt-4 border-t">
+                <label for="payment-amount" class="block text-sm font-medium text-gray-700 mb-2">ចំនួនប្រាក់ទទួល (Amount Received - USD):</label>
+                <input type="number" id="payment-amount" placeholder="0.00" min="0" step="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-lg">
+            </div>
+
+            <!-- Change Display -->
+            <div class="mt-4 space-y-2">
+                <div class="flex justify-between font-medium text-gray-700">
+                    <span>ប្រាក់អាប់ (USD):</span>
+                    <span id="change-usd" class="text-green-600 font-bold">$0.00</span>
+                </div>
+                <div class="flex justify-between font-medium text-gray-700">
+                    <span>ប្រាក់អាប់ (KHR):</span>
+                    <span id="change-khr" class="text-green-600 font-bold">0.00៛</span>
+                </div>
+            </div>
+
+            <button id="process-payment-btn" class="mt-6 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition duration-150 shadow-lg shadow-green-200/50" disabled>
+                បញ្ចប់ការទូទាត់ (Complete Payment)
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, collection, onSnapshot, query, setDoc, addDoc, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // IMPORTANT: Use the provided global variables
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pos-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // --- Core Variables ---
+        let db;
+        let auth;
+        let userId = null;
+        const KHR_RATE = 4000; // 1 USD = 4000 KHR
+
+        let cart = []; // { id: 'docId', name: 'Item', price_usd: 5.00, qty: 1 }
+        let products = []; // Full list of available products
+
+        // --- DOM Elements ---
+        const productListEl = document.getElementById('product-list');
+        const cartListEl = document.getElementById('cart-list');
+        const totalUsdEl = document.getElementById('total-usd');
+        const totalKhrEl = document.getElementById('total-khr');
+        const paymentAmountInput = document.getElementById('payment-amount');
+        const changeUsdEl = document.getElementById('change-usd');
+        const changeKhrEl = document.getElementById('change-khr');
+        const processPaymentBtn = document.getElementById('process-payment-btn');
+        const seedDataBtn = document.getElementById('seed-data-btn');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const userIdEl = document.getElementById('user-id');
+        const noProductsEl = document.getElementById('no-products'); // ADDED: Retrieve globally for safety
+        const emptyCartEl = document.getElementById('empty-cart'); // FIX: Retrieve globally for safety
+
+        // --- Firebase Initialization and Auth ---
+
+        async function initFirebase() {
+            setLogLevel('Debug');
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // ENSURE AUTHENTICATION IS COMPLETE BEFORE LISTENER SETUP
+                // Use await to synchronously complete sign-in first, preventing race conditions
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // Check auth state immediately after sign-in is awaited
+                const user = auth.currentUser;
+                
+                if (user) {
+                    userId = user.uid;
+                    userIdEl.textContent = userId;
+                    console.log("Firebase Auth Ready. User ID:", userId);
+                    // Call the listener setup only after successful authentication
+                    setupInventoryListener();
+                } else {
+                    console.error("Authentication failed: User object is null after sign-in attempt.");
+                    loadingOverlay.classList.add('hidden');
+                }
+
+                // Removed onAuthStateChanged logic that called setupInventoryListener 
+                // to avoid race condition where the listener started before auth was fully settled.
+
+            } catch (error) {
+                console.error("Firebase initialization or authentication error:", error);
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        // --- Firestore Utilities ---
+
+        function getPublicInventoryCollection() {
+            // Path: /artifacts/{appId}/public/data/inventory_products
+            return collection(db, 'artifacts', appId, 'public', 'data', 'inventory_products');
+        }
+
+        const initialSeedData = [
+            { name: 'នំបុ័ងដុត (Toasted Bread)', price_usd: 5.00, image: 'https://placehold.co/150x150/0000FF/FFFFFF?text=Product+1' },
+            { name: 'តែទឹកដោះគោ (Milk Tea)', price_usd: 6.50, image: 'https://placehold.co/150x150/FF0000/FFFFFF?text=Product+2' },
+            { name: 'កាហ្វេការ៉ាមែល (Caramel Coffee)', price_usd: 7.25, image: 'https://placehold.co/150x150/00FF00/000000?text=Product+3' },
+            { name: 'នំខេកចេក (Banana Cake)', price_usd: 8.90, image: 'https://placehold.co/150x150/FF8C00/FFFFFF?text=Product+4' },
+            { name: 'ដំឡូងបារាំងបំពង (French Fries)', price_usd: 9.99, image: 'https://placehold.co/150x150/800080/FFFFFF?text=Product+5' },
+            { name: 'ទឹកក្រូចស្រស់ (Fresh Orange Juice)', price_usd: 5.50, image: 'https://placehold.co/150x150/008080/FFFFFF?text=Product+6' },
+        ];
+
+        async function seedInitialData() {
+            if (!db || !userId) return console.error("Database or User not ready.");
+            seedDataBtn.disabled = true;
+
+            try {
+                const inventoryCol = getPublicInventoryCollection();
+                const snapshot = await getDocs(inventoryCol);
+
+                if (snapshot.empty) {
+                    console.log("Seeding initial product data...");
+                    for (const item of initialSeedData) {
+                        await addDoc(inventoryCol, item);
+                    }
+                    console.log("Initial data seeding complete.");
+                } else {
+                    console.log("Inventory already contains data. Skipping seeding.");
+                }
+                // The onSnapshot listener will handle the rendering
+            } catch (e) {
+                console.error("Error seeding initial data: ", e);
+            } finally {
+                seedDataBtn.disabled = false;
+            }
+        }
+        seedDataBtn.addEventListener('click', seedInitialData);
+
+        function setupInventoryListener() {
+            if (!db || !userId) return;
+
+            const inventoryCol = getPublicInventoryCollection();
+            onSnapshot(inventoryCol, (snapshot) => {
+                loadingOverlay.classList.add('hidden');
+                products = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    products.push({
+                        id: doc.id,
+                        name: data.name,
+                        price_usd: parseFloat(data.price_usd.toFixed(2)),
+                        image: data.image || 'https://placehold.co/150x150/cccccc/000000?text=Item'
+                    });
+                });
+                renderProducts();
+            }, (error) => {
+                console.error("Error listening to inventory: ", error);
+                // Ensure loading overlay is hidden even if there's a permission error
+                loadingOverlay.classList.add('hidden'); 
+            });
+        }
+
+        // --- Cart and UI Logic ---
+
+        function renderProducts() {
+            productListEl.innerHTML = '';
+            // noProductsEl is now globally available
+            // If it's null (e.g., if the HTML structure was wrong), the error would be caught here,
+            // but since it's correctly retrieved, we proceed.
+
+            if (products.length === 0) {
+                noProductsEl.classList.remove('hidden');
+                return;
+            }
+            noProductsEl.classList.add('hidden');
+
+            products.forEach(product => {
+                const card = document.createElement('div');
+                card.className = 'bg-gray-50 border border-gray-200 p-4 rounded-xl flex flex-col items-center hover:shadow-lg transition duration-200';
+                card.innerHTML = `
+                    <img src="${product.image}" alt="${product.name}" class="w-20 h-20 object-cover rounded-full mb-3 border-4 border-white shadow-md">
+                    <h3 class="text-lg font-semibold text-gray-800 text-center">${product.name}</h3>
+                    <p class="text-xl font-bold text-indigo-600 mt-1 mb-3">$${product.price_usd.toFixed(2)}</p>
+                    <button data-id="${product.id}" class="add-to-cart-btn w-full bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-2 rounded-lg transition duration-150 shadow-md">
+                        <svg class="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        បញ្ចូលរទេះ (Add)
+                    </button>
+                `;
+                productListEl.appendChild(card);
+            });
+
+            document.querySelectorAll('.add-to-cart-btn').forEach(button => {
+                button.addEventListener('click', handleAddToCart);
+            });
+        }
+
+        function handleAddToCart(event) {
+            const productId = event.currentTarget.dataset.id;
+            const product = products.find(p => p.id === productId);
+
+            if (product) {
+                const existingItem = cart.find(item => item.id === productId);
+
+                if (existingItem) {
+                    existingItem.qty += 1;
+                } else {
+                    cart.push({ ...product, qty: 1 });
+                }
+                renderCart();
+            }
+        }
+
+        function updateCartItemQty(id, delta) {
+            const itemIndex = cart.findIndex(item => item.id === id);
+
+            if (itemIndex > -1) {
+                cart[itemIndex].qty += delta;
+
+                if (cart[itemIndex].qty <= 0) {
+                    cart.splice(itemIndex, 1); // Remove item if qty is 0 or less
+                }
+                renderCart();
+            }
+        }
+
+        function calculateTotals() {
+            const totalUSD = cart.reduce((sum, item) => sum + (item.price_usd * item.qty), 0);
+            const totalKHR = totalUSD * KHR_RATE;
+            return { totalUSD: totalUSD, totalKHR: totalKHR };
+        }
+
+        function renderCart() {
+            // emptyCartEl is now globally available
+            const { totalUSD, totalKHR } = calculateTotals();
+
+            // Clearing the parent container removes all children, including emptyCartEl if it was there.
+            cartListEl.innerHTML = '';
+
+            if (cart.length === 0) {
+                cartListEl.appendChild(emptyCartEl); // FIX: Re-append the globally stored element before manipulating it
+                emptyCartEl.classList.remove('hidden');
+                processPaymentBtn.disabled = true;
+            } else {
+                // If cart is not empty, we don't re-append emptyCartEl (it remains removed)
+                processPaymentBtn.disabled = false;
+                cart.forEach(item => {
+                    const itemTotal = (item.price_usd * item.qty).toFixed(2);
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg shadow-sm';
+                    itemEl.innerHTML = `
+                        <div class="flex-grow">
+                            <p class="font-medium text-gray-800">${item.name}</p>
+                            <p class="text-sm text-gray-500">$${item.price_usd.toFixed(2)} x ${item.qty}</p>
+                        </div>
+                        <div class="text-right flex items-center">
+                            <span class="text-lg font-bold text-indigo-500 mr-4">$${itemTotal}</span>
+                            <div class="flex space-x-1">
+                                <button data-id="${item.id}" data-delta="-1" class="update-qty-btn text-white bg-red-500 hover:bg-red-600 w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">-</button>
+                                <button data-id="${item.id}" data-delta="1" class="update-qty-btn text-white bg-green-500 hover:bg-green-600 w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">+</button>
+                            </div>
+                        </div>
+                    `;
+                    cartListEl.appendChild(itemEl);
+                });
+
+                document.querySelectorAll('.update-qty-btn').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const id = e.currentTarget.dataset.id;
+                        const delta = parseInt(e.currentTarget.dataset.delta);
+                        updateCartItemQty(id, delta);
+                    });
+                });
+            }
+
+            totalUsdEl.textContent = `$${totalUSD.toFixed(2)}`;
+            totalKhrEl.textContent = `${totalKHR.toFixed(2)}៛`;
+            calculateChange(); // Recalculate change whenever the cart updates
+        }
+
+        // --- Payment and Change Logic ---
+
+        function calculateChange() {
+            const { totalUSD } = calculateTotals();
+            const amountReceived = parseFloat(paymentAmountInput.value) || 0;
+
+            let changeUSD = amountReceived - totalUSD;
+            changeUSD = Math.max(0, changeUSD); // Ensure change is not negative
+
+            const changeKHR = changeUSD * KHR_RATE;
+
+            changeUsdEl.textContent = `$${changeUSD.toFixed(2)}`;
+            changeKhrEl.textContent = `${changeKHR.toFixed(2)}៛`;
+
+            if (amountReceived >= totalUSD && totalUSD > 0) {
+                processPaymentBtn.disabled = false;
+                processPaymentBtn.textContent = 'បញ្ចប់ការទូទាត់ (Complete Payment)';
+                processPaymentBtn.classList.remove('bg-gray-400', 'hover:bg-gray-500');
+                processPaymentBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+            } else {
+                processPaymentBtn.disabled = true;
+                processPaymentBtn.textContent = (totalUSD > 0) ? 'ត្រូវការព័ត៌មានទូទាត់បន្ថែម' : 'សូមជ្រើសរើសទំនិញ';
+                processPaymentBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                processPaymentBtn.classList.add('bg-gray-400', 'hover:bg-gray-500');
+            }
+        }
+
+        paymentAmountInput.addEventListener('input', calculateChange);
+        paymentAmountInput.addEventListener('change', calculateChange);
+
+        processPaymentBtn.addEventListener('click', () => {
+            const { totalUSD, totalKHR } = calculateTotals();
+            const amountReceived = parseFloat(paymentAmountInput.value);
+            const changeUSD = parseFloat(changeUsdEl.textContent.replace('$', ''));
+            const changeKHR = parseFloat(changeKhrEl.textContent.replace('៛', ''));
+
+            if (amountReceived >= totalUSD) {
+                alertBox(
+                    'ការទូទាត់ជោគជ័យ!',
+                    `សរុប: $${totalUSD.toFixed(2)} / ${totalKHR.toFixed(2)}៛\n` +
+                    `ទទួល: $${amountReceived.toFixed(2)}\n` +
+                    `ប្រាក់អាប់: $${changeUSD.toFixed(2)} / ${changeKHR.toFixed(2)}៛` +
+                    `\n\nសូមអរគុណ!`,
+                    'success'
+                );
+                // Reset transaction
+                cart = [];
+                paymentAmountInput.value = '';
+                renderCart();
+                calculateChange();
+            } else {
+                 alertBox('ការទូទាត់បរាជ័យ', 'ចំនួនប្រាក់ទទួលមិនគ្រប់គ្រាន់ទេ។', 'error');
+            }
+        });
+
+        // --- Custom Alert Box (replacing alert()) ---
+
+        function alertBox(title, message, type) {
+            let bgColor = 'bg-indigo-500';
+            let icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+
+            if (type === 'error') {
+                bgColor = 'bg-red-500';
+                icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+            } else if (type === 'success') {
+                bgColor = 'bg-green-500';
+                icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+            }
+
+            const modalHtml = `
+                <div id="custom-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[999]">
+                    <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full transform transition-all duration-300 scale-100">
+                        <div class="flex items-center ${bgColor} text-white p-3 rounded-t-xl -mx-6 -mt-6 mb-4">
+                            ${icon}
+                            <h3 class="ml-2 text-lg font-bold">${title}</h3>
+                        </div>
+                        <pre class="whitespace-pre-wrap text-gray-700 mb-6">${message}</pre>
+                        <button id="close-modal" class="w-full ${bgColor} hover:opacity-90 text-white font-bold py-2 rounded-lg transition duration-150">
+                            យល់ព្រម (OK)
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+            document.getElementById('close-modal').addEventListener('click', () => {
+                document.getElementById('custom-modal').remove();
+            });
+        }
+
+
+        // --- Start Application ---
+        initFirebase();
+        renderCart(); // Initial render for empty cart/totals
+    </script>
+
+</body>
+</html>
